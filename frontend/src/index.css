@@ -1,0 +1,4 @@
+/* Minimal global styles - MUI CssBaseline handles most styling */
+#root {
+  min-height: 100vh;
+}
