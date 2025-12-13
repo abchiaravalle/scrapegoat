@@ -2,7 +2,9 @@
 
 A powerful web scraping application that crawls websites, extracts content, and generates clean, editable Word documents. Perfect for creating document collections from websites with proper formatting, heading hierarchy, and clickable hyperlinks.
 
-## 🚀 Quick Start (One-Liner)
+## 🚀 Quick Start
+
+### Development (One-Liner)
 
 ```bash
 git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh && npm run dev
@@ -18,6 +20,16 @@ This single command will:
 The application will be available at:
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000
+
+### Production with Caddy (One-Liner)
+
+For production deployment with automatic HTTPS:
+
+```bash
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup-caddy.sh
+```
+
+See [Deployment](#-deployment) section for details.
 
 ## 📋 Prerequisites
 
@@ -296,7 +308,82 @@ See `backend/models/database.js` for schema details.
 
 ## 🚢 Deployment
 
-### Production Build
+### Production with Caddy (Recommended - One Command Setup)
+
+Caddy provides automatic HTTPS, reverse proxy, and production-ready web server setup.
+
+#### One-Liner Production Setup
+
+```bash
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup-caddy.sh
+```
+
+This will:
+- Install all dependencies
+- Build the frontend for production
+- Install and configure Caddy web server
+- Set up automatic HTTPS (Let's Encrypt)
+- Configure reverse proxy
+- Create system services for automatic startup
+- Prompt you for your domain name
+
+**Prerequisites:**
+- Domain name pointing to your server's IP
+- Ports 80 and 443 open in firewall
+- sudo/root access
+
+**After running the script:**
+- Your app will be available at `https://your-domain.com`
+- Backend runs on `localhost:3000` (not publicly exposed)
+- Frontend is served via Caddy with automatic HTTPS
+- Services auto-start on server reboot
+
+#### Manual Caddy Setup
+
+1. Install dependencies and build:
+```bash
+bash setup.sh
+npm run build
+```
+
+2. Run Caddy setup:
+```bash
+bash setup-caddy.sh
+```
+
+3. Enter your domain when prompted
+
+#### Caddy Management Commands
+
+**Linux:**
+```bash
+# View Caddy status
+sudo systemctl status caddy
+
+# View Caddy logs
+sudo journalctl -u caddy -f
+
+# Reload Caddy configuration
+sudo systemctl reload caddy
+
+# Restart backend
+sudo systemctl restart scrapegoat
+```
+
+**macOS:**
+```bash
+# Start/Stop Caddy
+sudo caddy start --config /path/to/Caddyfile
+sudo caddy stop
+
+# Reload Caddy
+sudo caddy reload
+
+# View logs
+sudo caddy log
+```
+
+### Production Build (Without Caddy)
 
 1. Build the frontend:
 ```bash
@@ -314,6 +401,8 @@ HOST=0.0.0.0
 ```bash
 npm start
 ```
+
+The application will serve the frontend from the backend server.
 
 ### Docker (Future)
 

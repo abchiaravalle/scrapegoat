@@ -1,0 +1,26 @@
+# ScrapeGoat Caddy Configuration Template
+# This file is used by setup-caddy.sh to generate the actual Caddyfile
+# Replace YOUR_DOMAIN with your actual domain name
+
+YOUR_DOMAIN {
+    # Enable automatic HTTPS
+    encode zstd gzip
+    
+    # Reverse proxy API requests to backend
+    handle /api/* {
+        reverse_proxy localhost:3000 {
+            header_up Host {host}
+            header_up X-Real-IP {remote}
+            header_up X-Forwarded-For {remote}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+    
+    # Serve static frontend files
+    handle {
+        root * /var/www/scrapegoat/frontend/dist
+        try_files {path} /index.html
+        file_server
+    }
+}
+

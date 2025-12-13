@@ -8,7 +8,9 @@
     "dev:backend": "nodemon backend/server.js",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "start": "node backend/server.js"
+    "start": "node backend/server.js",
+    "setup:caddy": "bash setup-caddy.sh",
+    "production": "NODE_ENV=production PORT=3000 HOST=127.0.0.1 node backend/server.js"
   },
   "keywords": [],
   "author": "",
