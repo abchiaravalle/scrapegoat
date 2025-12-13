@@ -135,12 +135,22 @@ async function processJob(jobId, url, email, shareLink, followAllLinks = false, 
     }
 
     // Step 2: Generate Word documents
-    const wordGenerator = new WordGenerator(jobId, includeImages, contentSelector);
     const pages = await getPages(jobId);
     
+    if (!pages || pages.length === 0) {
+      console.error(`No pages found for job ${jobId}`);
+      await updateJobStatus(jobId, 'failed', 0);
+      return;
+    }
+    
+    console.log(`Starting document generation for ${pages.length} pages...`);
+    const wordGenerator = new WordGenerator(jobId, includeImages, contentSelector);
+    
     let processedCount = 0;
-    for (const page of pages) {
+    for (let i = 0; i < pages.length; i++) {
+      const page = pages[i];
       try {
+        console.log(`Generating document [${i + 1}/${pages.length}]: ${page.url}`);
         const wordPath = await wordGenerator.generateDocument(page.url, page.title);
         await updatePageWordPath(page.id, wordPath);
         processedCount++;
@@ -148,10 +158,11 @@ async function processJob(jobId, url, email, shareLink, followAllLinks = false, 
         const progress = 50 + Math.floor((processedCount / pages.length) * 40); // 50-90% for document generation
         await updateJobStatus(jobId, 'processing', progress, pages.length, processedCount);
       } catch (error) {
-        console.error(`Error generating document for page ${page.id}:`, error);
+        console.error(`Error generating document for page ${page.id} (${page.url}):`, error.message);
         // Continue with next page
       }
     }
+    console.log(`Document generation complete. Processed ${processedCount}/${pages.length} pages.`);
 
     // Step 3: Create zip file
     const zipCreator = new ZipCreator(jobId);

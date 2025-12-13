@@ -1,69 +1,88 @@
 # ScrapeGoat
 
-A web application that crawls websites, extracts content, and generates clean Word documents for each page. Perfect for creating editable document collections from websites.
+A powerful web scraping application that crawls websites, extracts content, and generates clean, editable Word documents. Perfect for creating document collections from websites with proper formatting, heading hierarchy, and clickable hyperlinks.
 
-## Features
+## 🚀 Quick Start (One-Liner)
 
-- **Web Crawling**: Automatically discovers all pages within the same domain
-- **Word Document Generation**: Creates clean, formatted Word documents with:
-  - Preserved heading hierarchy (H1-H6)
-  - Consistent paragraph formatting
-  - Clickable hyperlinks
-  - Easy to edit in Microsoft Word
-- **Progress Tracking**: Real-time progress updates during crawling and processing
-- **Shareable Links**: Unique links for each scraping job
-- **Email Notifications**: Optional email alerts when jobs complete
-- **Zip Download**: All documents packaged in a single zip file
-
-## Technology Stack
-
-- **Backend**: Node.js with Express
-- **Frontend**: React with Vite
-- **Database**: SQLite
-- **Email**: Nodemailer (supports Gmail, SMTP, SendGrid, etc.)
-
-## Installation
-
-1. Clone the repository:
 ```bash
-git clone <repository-url>
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh && npm run dev
+```
+
+This single command will:
+- Clone the repository
+- Install all dependencies (root and frontend)
+- Create necessary configuration files
+- Set up storage directories
+- Start the development server
+
+The application will be available at:
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3000
+
+## 📋 Prerequisites
+
+- **Node.js** 18+ ([Download](https://nodejs.org/))
+- **npm** (comes with Node.js)
+- **Git** (for cloning)
+
+## 🛠️ Manual Installation
+
+If you prefer to set up manually:
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/abchiaravalle/scrapegoat.git
 cd scrapegoat
 ```
 
-2. Install backend dependencies:
+### 2. Run Setup Script
+
 ```bash
-npm install
+bash setup.sh
 ```
 
-3. Install frontend dependencies:
+Or install dependencies manually:
+
 ```bash
-cd frontend
+# Install root dependencies
 npm install
-cd ..
+
+# Install frontend dependencies
+cd frontend && npm install && cd ..
 ```
 
-4. Configure email (optional but recommended):
-   - Copy `.env.example` to `.env`
-   - See "Email Configuration" section below for setup options
+### 3. Configure Environment (Optional)
 
-## Running the Application
+The setup script creates a `.env` file with default settings. You can customize it:
+
+```env
+# Server Configuration
+PORT=3000
+HOST=0.0.0.0
+NODE_ENV=development
+
+# Optional: Email Configuration
+# See "Email Configuration" section below
+```
+
+## 🎯 Usage
 
 ### Development Mode
 
-Run both backend and frontend concurrently:
+Start both backend and frontend concurrently:
+
 ```bash
 npm run dev
 ```
 
 Or run them separately:
 
-Backend (port 3000):
 ```bash
+# Backend only (port 3000)
 npm run dev:backend
-```
 
-Frontend (port 5173):
-```bash
+# Frontend only (port 5173)
 npm run dev:frontend
 ```
 
@@ -79,43 +98,91 @@ npm run build
 npm start
 ```
 
-## Usage
+The application will serve the frontend from the backend server.
 
-1. Open the application in your browser (http://localhost:5173 in dev mode)
-2. Enter a URL to scrape
-3. Optionally provide an email address for notifications
-4. Click "Start Scraping"
-5. Monitor progress on the job status page
-6. Download the zip file when complete
+## ✨ Features
 
-## Project Structure
+- **🌐 Web Crawling**: Automatically discovers and crawls pages within the same domain
+- **📄 Word Document Generation**: Creates clean, formatted Word documents with:
+  - Preserved heading hierarchy (H1-H6)
+  - Consistent paragraph formatting
+  - Clickable hyperlinks
+  - Spacing between sections for readability
+  - Easy to edit in Microsoft Word
+- **📊 Progress Tracking**: Real-time progress updates during crawling and processing
+- **🔗 Shareable Links**: Unique links for each scraping job
+- **📦 Zip Download**: All documents packaged in a single zip file
+- **🎨 Modern UI**: Clean, responsive interface built with React and Material-UI
+- **⚙️ Flexible Options**:
+  - Single page scraping (no crawling)
+  - Cross-domain link following
+  - Content selector for targeted scraping
+  - Image downloading (saved separately)
+
+## 🏗️ Project Structure
 
 ```
 scrapegoat/
 ├── backend/
-│   ├── models/          # Database models
+│   ├── models/          # Database models (SQLite)
 │   ├── routes/          # API routes
-│   ├── services/       # Business logic (crawler, word generator, zip creator)
-│   ├── services/       # Email service (nodemailer)
-│   └── storage/        # Temporary file storage
+│   ├── services/       # Business logic
+│   │   ├── crawler.js          # Web crawler
+│   │   ├── wordGenerator.js    # Word document generator
+│   │   ├── zipCreator.js       # ZIP file creator
+│   │   └── emailService.js     # Email notifications
+│   ├── storage/         # Temporary file storage
+│   │   └── jobs/        # Job-specific storage
+│   ├── data/            # Database files
+│   └── server.js        # Express server
 ├── frontend/
-│   └── src/
-│       ├── components/  # React components
-│       └── App.jsx     # Main app component
-└── package.json
+│   ├── src/
+│   │   ├── components/  # React components
+│   │   │   ├── UrlForm.jsx      # Job creation form
+│   │   │   └── JobStatus.jsx    # Job status display
+│   │   ├── App.jsx       # Main app component
+│   │   ├── theme.js      # Material-UI theme
+│   │   └── index.css     # Global styles
+│   ├── package.json
+│   └── vite.config.js    # Vite configuration
+├── setup.sh              # Setup script
+├── package.json
+└── README.md
 ```
 
-## API Endpoints
+## 🔌 API Endpoints
 
 - `POST /api/jobs` - Create a new scraping job
+  ```json
+  {
+    "url": "https://example.com",
+    "followAllLinks": false,
+    "includeImages": false,
+    "singlePageOnly": false,
+    "contentSelector": null
+  }
+  ```
+
 - `GET /api/jobs/:jobId` - Get job status
+  ```json
+  {
+    "status": "processing",
+    "progress": 75,
+    "totalPages": 100,
+    "processedPages": 75,
+    "zipUrl": "/api/jobs/:jobId/download" // Only when completed
+  }
+  ```
+
 - `GET /api/jobs/:jobId/download` - Download zip file
 
-## Email Configuration
+- `GET /health` - Health check endpoint
+
+## 📧 Email Configuration (Optional)
 
 Email notifications are sent when jobs complete. Configure email in your `.env` file using one of these options:
 
-### Option 1: Gmail with App Password (Easiest for Testing)
+### Option 1: Gmail with App Password (Easiest)
 
 1. Enable 2-Step Verification on your Google Account
 2. Generate an App Password: https://myaccount.google.com/apppasswords
@@ -152,15 +219,118 @@ EMAIL_FROM=noreply@scrapegoat.com
 EMAIL_FROM_NAME=ScrapeGoat
 ```
 
-**Note**: If no email configuration is provided, the app will use a test account (emails won't actually be sent, but you'll see preview URLs in the console).
+**Note**: If no email configuration is provided, the app will work without email notifications.
 
-## Notes
+## 🔧 Configuration
 
-- The crawler respects the same domain restriction
-- Documents are stored temporarily and can be cleaned up after a set period
-- The application uses SQLite for simplicity, but can be easily migrated to PostgreSQL
+### Environment Variables
 
-## License
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Backend server port |
+| `HOST` | `0.0.0.0` | Server host (use `0.0.0.0` for external access) |
+| `NODE_ENV` | `development` | Environment mode |
+
+### Crawler Settings
+
+The crawler has built-in limits to prevent excessive resource usage:
+- **Max URLs**: 1000 pages per job
+- **Max Crawl Time**: 30 minutes
+- **Request Delay**: 500ms between requests
+- **Request Timeout**: 10 seconds per page
+
+These can be adjusted in `backend/services/crawler.js`.
+
+## 🐛 Troubleshooting
+
+### Port Already in Use
+
+If port 3000 or 5173 is already in use:
+
+```bash
+# Change backend port in .env
+PORT=3001
+
+# Change frontend port in frontend/vite.config.js
+# Update the port value in the server configuration
+```
+
+### Database Issues
+
+If you encounter database errors, you can reset the database:
+
+```bash
+rm backend/data/scrapegoat.db
+# The database will be recreated on next server start
+```
+
+### Installation Issues
+
+If you encounter installation errors:
+
+```bash
+# Clear npm cache
+npm cache clean --force
+
+# Remove node_modules and reinstall
+rm -rf node_modules frontend/node_modules
+npm install
+cd frontend && npm install && cd ..
+```
+
+## 📝 Development
+
+### Adding New Features
+
+1. Backend changes: Edit files in `backend/`
+2. Frontend changes: Edit files in `frontend/src/`
+3. The dev server will auto-reload on changes
+
+### Database Schema
+
+The application uses SQLite with the following tables:
+- `jobs` - Job metadata and status
+- `pages` - Individual pages discovered during crawling
+
+See `backend/models/database.js` for schema details.
+
+## 🚢 Deployment
+
+### Production Build
+
+1. Build the frontend:
+```bash
+npm run build
+```
+
+2. Set environment variables:
+```env
+NODE_ENV=production
+PORT=3000
+HOST=0.0.0.0
+```
+
+3. Start the server:
+```bash
+npm start
+```
+
+### Docker (Future)
+
+Docker support is planned for future releases.
+
+## 📄 License
 
 ISC
 
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+## 📞 Support
+
+For issues, questions, or contributions, please open an issue on GitHub.
+
+---
+
+**Made with ❤️ for easy web scraping and document generation**

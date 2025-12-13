@@ -56,3 +56,5 @@ SENDGRID_API_KEY=SG.your-api-key-here
 - **Gmail not working?** Make sure you're using an App Password, not your regular password
 - **Test mode?** If no configuration is found, the app uses a test account. Check console for preview URLs.
 
+
+

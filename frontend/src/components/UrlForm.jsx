@@ -16,14 +16,12 @@ import {
 } from '@mui/material';
 import {
   Link as LinkIcon,
-  Email as EmailIcon,
   Code as CodeIcon,
   PlayArrow as PlayArrowIcon,
 } from '@mui/icons-material';
 
 function UrlForm({ onJobCreated }) {
   const [url, setUrl] = useState('');
-  const [email, setEmail] = useState('');
   const [followAllLinks, setFollowAllLinks] = useState(false);
   const [includeImages, setIncludeImages] = useState(false);
   const [singlePageOnly, setSinglePageOnly] = useState(false);
@@ -39,7 +37,7 @@ function UrlForm({ onJobCreated }) {
     try {
       const response = await axios.post('/api/jobs', {
         url: url.trim(),
-        email: email.trim() || null,
+        email: null,
         followAllLinks: followAllLinks,
         includeImages: includeImages,
         singlePageOnly: singlePageOnly,
@@ -82,24 +80,6 @@ function UrlForm({ onJobCreated }) {
                 startAdornment: (
                   <InputAdornment position="start">
                     <LinkIcon color="action" />
-                  </InputAdornment>
-                ),
-              }}
-            />
-
-            <TextField
-              fullWidth
-              label="Email (optional)"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="your@email.com"
-              disabled={loading}
-              helperText="We'll email you when the job is complete"
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <EmailIcon color="action" />
                   </InputAdornment>
                 ),
               }}

@@ -111,7 +111,8 @@ class WordGenerator {
       }
 
       // Process content (mainContent already set above)
-      this.processElement($, mainContent, children, pageUrl, imageMap);
+      // Pass true for isTopLevel to add spacing between outermost divs/sections
+      this.processElement($, mainContent, children, pageUrl, imageMap, true);
 
       const doc = new Document({
         sections: [
@@ -174,8 +175,9 @@ class WordGenerator {
     return imageMap;
   }
 
-  processElement($, element, children, baseUrl = '', imageMap = {}) {
+  processElement($, element, children, baseUrl = '', imageMap = {}, isTopLevel = false) {
     const $element = $(element);
+    let isFirstTopLevelDivOrSection = true; // Track if this is the first top-level div/section
 
     // Process child nodes
     $element.contents().each((i, node) => {
@@ -295,8 +297,21 @@ class WordGenerator {
         } else if (tagName === 'br') {
           children.push(new Paragraph({ text: '' }));
         } else if (['div', 'section', 'article', 'main', 'li', 'ul', 'ol'].includes(tagName)) {
-          // Recursively process block elements
-          this.processElement($, $(node), children, baseUrl, imageMap);
+          const isOutermostDivOrSection = isTopLevel && (tagName === 'div' || tagName === 'section');
+          
+          // Add spacing before outermost divs/sections (except the first one)
+          if (isOutermostDivOrSection && !isFirstTopLevelDivOrSection) {
+            // Add spacing paragraph before this div/section
+            children.push(new Paragraph({ text: '' }));
+          }
+          
+          // Recursively process block elements (nested elements are not top-level)
+          this.processElement($, $(node), children, baseUrl, imageMap, false);
+          
+          // Mark that we've seen at least one top-level div/section
+          if (isOutermostDivOrSection) {
+            isFirstTopLevelDivOrSection = false;
+          }
         }
       }
     });
