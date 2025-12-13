@@ -2,34 +2,44 @@
 
 A powerful web scraping application that crawls websites, extracts content, and generates clean, editable Word documents. Perfect for creating document collections from websites with proper formatting, heading hierarchy, and clickable hyperlinks.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (One-Liner)
 
-### Development (One-Liner)
+### Development Setup
 
 ```bash
-git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh && npm run dev
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh
 ```
 
-This single command will:
-- Clone the repository
-- Install all dependencies (root and frontend)
-- Create necessary configuration files
-- Set up storage directories
-- Start the development server
+When prompted, choose **No** (or just press Enter) for Caddy setup. Then start the dev server:
+
+```bash
+npm run dev
+```
 
 The application will be available at:
 - **Frontend**: http://localhost:5173
 - **Backend API**: http://localhost:3000
 
-### Production with Caddy (One-Liner)
+### Production Setup with Caddy (One-Liner)
 
 For production deployment with automatic HTTPS:
 
 ```bash
-git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup-caddy.sh
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh
 ```
 
-See [Deployment](#-deployment) section for details.
+When prompted, choose **Yes** for Caddy setup. The script will:
+- Install all dependencies
+- Build frontend for production
+- Install and configure Caddy
+- Set up automatic HTTPS (Let's Encrypt)
+- Configure reverse proxy
+- Create system services
+- Prompt for your domain name
+
+Your app will be live at `https://your-domain.com` when complete!
+
+See [Deployment](#-deployment) section for more details.
 
 ## 📋 Prerequisites
 
@@ -315,8 +325,10 @@ Caddy provides automatic HTTPS, reverse proxy, and production-ready web server s
 #### One-Liner Production Setup
 
 ```bash
-git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup-caddy.sh
+git clone https://github.com/abchiaravalle/scrapegoat.git && cd scrapegoat && bash setup.sh
 ```
+
+When prompted, choose **Yes** for Caddy setup.
 
 This will:
 - Install all dependencies
@@ -340,18 +352,13 @@ This will:
 
 #### Manual Caddy Setup
 
-1. Install dependencies and build:
+Run the unified setup script and choose production when prompted:
+
 ```bash
 bash setup.sh
-npm run build
 ```
 
-2. Run Caddy setup:
-```bash
-bash setup-caddy.sh
-```
-
-3. Enter your domain when prompted
+When asked "Do you want to set up production with Caddy?", answer **Yes** and enter your domain.
 
 #### Caddy Management Commands
 
