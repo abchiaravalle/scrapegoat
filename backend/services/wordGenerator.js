@@ -114,10 +114,23 @@ class WordGenerator {
       // Pass true for isTopLevel to add spacing between outermost divs/sections
       this.processElement($, mainContent, children, pageUrl, imageMap, true);
 
+      // Post-process children to optimize layout
+      const optimizedChildren = this.optimizeLayout(children);
+      
       const doc = new Document({
         sections: [
           {
-            children: children,
+            children: optimizedChildren,
+            properties: {
+              page: {
+                margin: {
+                  top: 1440,    // 1 inch
+                  right: 1440,  // 1 inch
+                  bottom: 1440, // 1 inch
+                  left: 1440,   // 1 inch
+                },
+              },
+            },
           },
         ],
       });
@@ -199,44 +212,86 @@ class WordGenerator {
         const tagName = node.name.toLowerCase();
 
         if (tagName === 'h1') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_1,
             })
           );
         } else if (tagName === 'h2') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_2,
             })
           );
         } else if (tagName === 'h3') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_3,
             })
           );
         } else if (tagName === 'h4') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_4,
             })
           );
         } else if (tagName === 'h5') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_5,
             })
           );
         } else if (tagName === 'h6') {
+          const headingText = $(node).text().trim();
+          const isSemiboldPhrase = this.isSemiboldPhrase(headingText);
           children.push(
             new Paragraph({
-              text: $(node).text().trim(),
+              children: [
+                new TextRun({
+                  text: headingText,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
               heading: HeadingLevel.HEADING_6,
             })
           );
@@ -298,6 +353,17 @@ class WordGenerator {
           children.push(new Paragraph({ text: '' }));
         } else if (['div', 'section', 'article', 'main', 'li', 'ul', 'ol'].includes(tagName)) {
           const isOutermostDivOrSection = isTopLevel && (tagName === 'div' || tagName === 'section');
+          const $node = $(node);
+          
+          // Detect column-like structures (left/right columns, multi-column layouts)
+          const classNames = ($node.attr('class') || '').toLowerCase();
+          const id = ($node.attr('id') || '').toLowerCase();
+          const isColumn = /col|column|left|right|sidebar/.test(classNames + ' ' + id);
+          const isFullWidth = /full|wide|container|wrapper|main-content/.test(classNames + ' ' + id);
+          
+          // Detect if this is likely a page/section break point
+          const hasLargeHeading = $node.find('h1, h2, h3').length > 0;
+          const hasSubstantialContent = $node.text().trim().length > 500;
           
           // Add spacing before outermost divs/sections (except the first one)
           if (isOutermostDivOrSection && !isFirstTopLevelDivOrSection) {
@@ -305,8 +371,34 @@ class WordGenerator {
             children.push(new Paragraph({ text: '' }));
           }
           
-          // Recursively process block elements (nested elements are not top-level)
-          this.processElement($, $(node), children, baseUrl, imageMap, false);
+          // If this is a column and we have substantial content, add a page break before it
+          // to help with layout (but only if it's not the first element)
+          if (isColumn && hasSubstantialContent && !isFirstTopLevelDivOrSection && children.length > 10) {
+            // Add a page break to start new page for better column layout
+            children.push(
+              new Paragraph({
+                text: '',
+                pageBreakBefore: true,
+              })
+            );
+          }
+          
+          // Process the element
+          const beforeLength = children.length;
+          this.processElement($, $node, children, baseUrl, imageMap, false);
+          const afterLength = children.length;
+          const addedContent = afterLength - beforeLength;
+          
+          // If this is a full-width section with substantial content, add spacing after
+          if (isFullWidth && addedContent > 5) {
+            children.push(new Paragraph({ text: '' }));
+            children.push(new Paragraph({ text: '' }));
+          }
+          
+          // If this was a column with content, add spacing after to separate from next column
+          if (isColumn && addedContent > 0) {
+            children.push(new Paragraph({ text: '' }));
+          }
           
           // Mark that we've seen at least one top-level div/section
           if (isOutermostDivOrSection) {
@@ -419,6 +511,101 @@ class WordGenerator {
       .substring(0, 100)
       .replace(/_+/g, '_')
       .replace(/^_|_$/g, '') || 'page';
+  }
+
+  // Optimize layout by adding page breaks and adjusting spacing
+  optimizeLayout(children) {
+    const optimized = [];
+    let consecutiveEmpty = 0;
+    let paragraphCount = 0;
+    
+    for (let i = 0; i < children.length; i++) {
+      const child = children[i];
+      
+      // Check if paragraph has content
+      const hasContent = (child.text && child.text.trim() !== '') || 
+                        (child.children && child.children.length > 0 && 
+                         child.children.some(c => c.text && c.text.trim() !== ''));
+      
+      // Count non-empty paragraphs
+      if (hasContent) {
+        paragraphCount++;
+        consecutiveEmpty = 0;
+      } else {
+        consecutiveEmpty++;
+      }
+      
+      // Add page break after substantial content (every ~25-30 paragraphs)
+      // This helps prevent too much blank space at bottom of pages
+      if (hasContent && paragraphCount > 0 && paragraphCount % 28 === 0 && i < children.length - 5) {
+        // Check if next few items are substantial
+        const nextItems = children.slice(i + 1, Math.min(i + 6, children.length));
+        const hasSubstantialNext = nextItems.some(item => {
+          const itemHasContent = (item.text && item.text.trim().length > 50) || 
+                                (item.children && item.children.length > 0);
+          return itemHasContent;
+        });
+        
+        if (hasSubstantialNext) {
+          optimized.push(child);
+          // Add page break before next substantial content
+          optimized.push(
+            new Paragraph({
+              text: '',
+              pageBreakBefore: true,
+            })
+          );
+          continue;
+        }
+      }
+      
+      // Limit consecutive empty paragraphs to 2
+      if (!hasContent) {
+        if (consecutiveEmpty <= 2) {
+          optimized.push(child);
+        }
+        // Skip additional empty paragraphs beyond 2
+      } else {
+        optimized.push(child);
+      }
+    }
+    
+    return optimized;
+  }
+
+  // Check if a heading text should be semibold (like "Measuring Care," "Enhancing Audits," etc.)
+  isSemiboldPhrase(text) {
+    if (!text) return false;
+    
+    // Patterns for semibold phrases:
+    // 1. Phrases ending with a comma (e.g., "Measuring Care," "Enhancing Audits,")
+    // 2. Short phrases (typically 2-3 words) that are card headings
+    // 3. Phrases with gerund verbs (ending in -ing) followed by a noun
+    
+    const trimmed = text.trim();
+    
+    // Check if it ends with a comma
+    if (trimmed.endsWith(',')) {
+      return true;
+    }
+    
+    // Check for gerund + noun pattern (e.g., "Measuring Care", "Enhancing Audits")
+    const gerundPattern = /^[A-Z][a-z]+ing\s+[A-Z][a-z]+/;
+    if (gerundPattern.test(trimmed)) {
+      return true;
+    }
+    
+    // Check for short phrases (2-3 words, typically card headings)
+    const words = trimmed.split(/\s+/);
+    if (words.length >= 2 && words.length <= 4) {
+      // If it's a short phrase with title case, likely a card heading
+      const isTitleCase = words.every(word => /^[A-Z]/.test(word));
+      if (isTitleCase) {
+        return true;
+      }
+    }
+    
+    return false;
   }
 }
 
