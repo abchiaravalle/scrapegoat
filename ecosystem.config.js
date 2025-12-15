@@ -8,7 +8,7 @@ module.exports = {
       exec_mode: 'fork',
       env: {
         NODE_ENV: 'production',
-        PORT: 3000,
+        PORT: 5173,
         HOST: '0.0.0.0', // Changed to 0.0.0.0 to allow external access if needed
       },
       error_file: './logs/backend-error.log',

@@ -26,11 +26,13 @@
   "dependencies": {
     "archiver": "^6.0.1",
     "axios": "^1.6.0",
+    "bcrypt": "^6.0.0",
     "cheerio": "^1.0.0-rc.12",
     "cors": "^2.8.5",
     "docx": "^8.2.2",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "express-session": "^1.18.2",
     "nodemailer": "^7.0.11",
     "sqlite3": "^5.1.6",
     "uuid": "^9.0.1"
@@ -40,5 +42,3 @@
     "nodemon": "^3.0.1"
   }
 }
-
-

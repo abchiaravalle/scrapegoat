@@ -72,6 +72,35 @@ function initializeDatabase() {
   `, (err) => {
     if (err) console.error('Error creating pages table:', err);
   });
+
+  // Create users table
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+  `, (err) => {
+    if (err) {
+      console.error('Error creating users table:', err);
+    } else {
+      // Initialize first user if users table is empty
+      db.get('SELECT COUNT(*) as count FROM users', (err, row) => {
+        if (!err && row && row.count === 0) {
+          const bcrypt = require('bcrypt');
+          const hash = bcrypt.hashSync('goats', 10);
+          db.run('INSERT INTO users (username, password_hash) VALUES (?, ?)', ['mikey', hash], (err) => {
+            if (err) {
+              console.error('Error creating initial user:', err);
+            } else {
+              console.log('✅ Created initial user: mikey');
+            }
+          });
+        }
+      });
+    }
+  });
 }
 
 // Job operations
@@ -206,6 +235,63 @@ function pageExists(jobId, url) {
   });
 }
 
+// User operations
+function getUserByUsername(username) {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.get(
+      'SELECT * FROM users WHERE username = ?',
+      [username],
+      (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      }
+    );
+  });
+}
+
+function getAllUsers() {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.all(
+      'SELECT id, username, created_at FROM users ORDER BY username',
+      [],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+}
+
+function createUser(username, passwordHash) {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.run(
+      'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+      [username, passwordHash],
+      function(err) {
+        if (err) reject(err);
+        else resolve(this.lastID);
+      }
+    );
+  });
+}
+
+function deleteUser(userId) {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.run(
+      'DELETE FROM users WHERE id = ?',
+      [userId],
+      function(err) {
+        if (err) reject(err);
+        else resolve(this.changes);
+      }
+    );
+  });
+}
+
 module.exports = {
   getDatabase,
   createJob,
@@ -215,6 +301,10 @@ module.exports = {
   addPage,
   updatePageWordPath,
   getPagesByJob,
-  pageExists
+  pageExists,
+  getUserByUsername,
+  getAllUsers,
+  createUser,
+  deleteUser
 };
 

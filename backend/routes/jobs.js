@@ -5,13 +5,14 @@ const Crawler = require('../services/crawler');
 const WordGenerator = require('../services/wordGenerator');
 const ZipCreator = require('../services/zipCreator');
 const { updateJobStatus, updateJobZipPath, updatePageWordPath, getPagesByJob: getPages, addPage } = require('../models/database');
+const { requireAuth } = require('../middleware/auth');
 const path = require('path');
 const fs = require('fs');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
-// Create new job
-router.post('/', async (req, res) => {
+// Create new job (requires auth)
+router.post('/', requireAuth, async (req, res) => {
   try {
     const { url, email, followAllLinks = false, includeImages = false, singlePageOnly = false, contentSelector = null } = req.body;
 
@@ -45,7 +46,7 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Get job status
+// Get job status (public - shareable links should work without auth)
 router.get('/:jobId', async (req, res) => {
   try {
     const { jobId } = req.params;

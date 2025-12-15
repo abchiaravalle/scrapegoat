@@ -46,7 +46,15 @@ function UrlForm({ onJobCreated }) {
 
       onJobCreated(response.data.jobId, response.data.shareLink);
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to create job. Please try again.');
+      if (err.response?.status === 401) {
+        setError('Session expired. Please refresh the page and login again.');
+        // Redirect to login after a moment
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        setError(err.response?.data?.error || 'Failed to create job. Please try again.');
+      }
     } finally {
       setLoading(false);
     }

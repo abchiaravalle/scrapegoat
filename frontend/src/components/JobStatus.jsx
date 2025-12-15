@@ -51,7 +51,13 @@ function JobStatus({ jobId, shareLink }) {
         }
       } catch (err) {
         if (!isMounted) return;
-        setError(err.response?.data?.error || 'Failed to fetch job status');
+        // Job status can be viewed without auth (shareable links)
+        // Only show error if it's not a 401 (which would be unexpected for public job status)
+        if (err.response?.status === 404) {
+          setError('Job not found');
+        } else {
+          setError(err.response?.data?.error || 'Failed to fetch job status');
+        }
         setLoading(false);
       }
     };
