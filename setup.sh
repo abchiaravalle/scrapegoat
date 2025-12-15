@@ -291,11 +291,22 @@ else
     echo ""
     echo "✅ Development setup complete!"
     echo ""
-    echo "To start the development server, run:"
-    echo "  npm run dev"
-    echo ""
-    echo "The application will be available at:"
-    echo "  Frontend: http://localhost:5173"
-    echo "  Backend:  http://localhost:3000"
-    echo ""
+    read -p "🔧 Do you want to set up PM2 for persistent service management? [y/N]: " SETUP_PM2
+    if [[ "$SETUP_PM2" =~ ^[Yy]$ ]]; then
+        echo ""
+        echo "🚀 Setting up PM2..."
+        bash setup-pm2.sh
+    else
+        echo ""
+        echo "To start the development server, run:"
+        echo "  npm run dev"
+        echo ""
+        echo "The application will be available at:"
+        echo "  Frontend: http://localhost:5173"
+        echo "  Backend:  http://localhost:3000"
+        echo ""
+        echo "To set up PM2 later, run:"
+        echo "  bash setup-pm2.sh"
+        echo ""
+    fi
 fi

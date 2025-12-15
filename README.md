@@ -316,6 +316,78 @@ The application uses SQLite with the following tables:
 
 See `backend/models/database.js` for schema details.
 
+## 🔄 Process Management with PM2
+
+PM2 is recommended for running ScrapeGoat as a persistent service. It provides:
+- Automatic restarts on crashes
+- Log management
+- Process monitoring
+- Startup on system boot
+
+### Setup PM2
+
+**Option 1: During initial setup**
+```bash
+bash setup.sh
+# When prompted, choose 'y' for PM2 setup
+```
+
+**Option 2: Standalone PM2 setup**
+```bash
+bash setup-pm2.sh
+```
+
+### PM2 Commands
+
+```bash
+# Start services
+npm run pm2:start
+
+# View status
+npm run pm2:status
+
+# View logs
+npm run pm2:logs
+
+# Restart services
+npm run pm2:restart
+
+# Stop services
+npm run pm2:stop
+
+# Delete services
+npm run pm2:delete
+
+# Save PM2 configuration
+npm run pm2:save
+
+# Setup PM2 to start on boot
+npm run pm2:startup
+```
+
+### PM2 Direct Commands
+
+```bash
+pm2 status
+pm2 logs
+pm2 logs scrapegoat-backend
+pm2 restart all
+pm2 restart scrapegoat-backend
+pm2 stop all
+pm2 monit  # Monitor resources
+```
+
+### PM2 Configuration
+
+The PM2 configuration is in `ecosystem.config.js`. It includes:
+- Backend service (runs on port 3000)
+- Automatic restarts
+- Log file management
+- Memory limits
+- Environment variables
+
+**Note:** In production mode, the backend serves the built frontend, so only the backend process runs under PM2.
+
 ## 🚢 Deployment
 
 ### Production with Caddy (Recommended - One Command Setup)

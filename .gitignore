@@ -8,6 +8,8 @@ backend/data/
 dist/
 build/
 Caddyfile
+logs/
+.pm2/
 
 
 
