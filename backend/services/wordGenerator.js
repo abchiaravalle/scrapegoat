@@ -61,6 +61,21 @@ class WordGenerator {
         mainContent = $('body').first();
       }
 
+      // Debug: Log content info
+      const contentText = mainContent.text().trim();
+      const contentLength = contentText.length;
+      console.log(`Processing content from ${pageUrl}: ${contentLength} characters found`);
+      
+      if (contentLength === 0) {
+        console.warn(`WARNING: No text content found in mainContent for ${pageUrl}`);
+        // Try to get all text from body as fallback
+        const bodyText = $('body').text().trim();
+        if (bodyText.length > 0) {
+          console.log(`Fallback: Found ${bodyText.length} characters in body, using body instead`);
+          mainContent = $('body').first();
+        }
+      }
+
       // Get folder structure from URL
       const urlFolderPath = this.getFolderPathFromUrl(pageUrl);
       const documentFolder = path.join(this.documentsDir, urlFolderPath);
@@ -112,7 +127,65 @@ class WordGenerator {
 
       // Process content (mainContent already set above)
       // Pass true for isTopLevel to add spacing between outermost divs/sections
+      const beforeProcessLength = children.length;
       this.processElement($, mainContent, children, pageUrl, imageMap, true);
+      const afterProcessLength = children.length;
+      
+      // If no content was added, try a more aggressive extraction
+      if (afterProcessLength === beforeProcessLength || afterProcessLength <= 3) {
+        console.warn(`WARNING: processElement added no/minimal content for ${pageUrl}, trying fallback extraction`);
+        
+        // Fallback: Extract all paragraphs, headings, and text blocks directly
+        mainContent.find('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote').each((i, elem) => {
+          const $elem = $(elem);
+          const text = $elem.text().trim();
+          if (text && text.length > 0) {
+            const tagName = elem.name.toLowerCase();
+            if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+              const level = parseInt(tagName.charAt(1));
+              const headingLevel = [
+                HeadingLevel.HEADING_1,
+                HeadingLevel.HEADING_2,
+                HeadingLevel.HEADING_3,
+                HeadingLevel.HEADING_4,
+                HeadingLevel.HEADING_5,
+                HeadingLevel.HEADING_6
+              ][level - 1];
+              children.push(
+                new Paragraph({
+                  text: text,
+                  heading: headingLevel,
+                })
+              );
+            } else {
+              children.push(
+                new Paragraph({
+                  children: [new TextRun({ text: text })],
+                })
+              );
+            }
+          }
+        });
+        
+        // If still no content, get all text from mainContent
+        if (children.length <= 3) {
+          const allText = mainContent.text().trim();
+          if (allText && allText.length > 0) {
+            // Split by newlines and create paragraphs
+            const textBlocks = allText.split(/\n+/).filter(block => block.trim().length > 0);
+            textBlocks.forEach(block => {
+              const trimmed = block.trim();
+              if (trimmed.length > 0) {
+                children.push(
+                  new Paragraph({
+                    children: [new TextRun({ text: trimmed })],
+                  })
+                );
+              }
+            });
+          }
+        }
+      }
 
       // Post-process children to optimize layout
       const optimizedChildren = this.optimizeLayout(children);
@@ -191,6 +264,11 @@ class WordGenerator {
   processElement($, element, children, baseUrl = '', imageMap = {}, isTopLevel = false) {
     const $element = $(element);
     let isFirstTopLevelDivOrSection = true; // Track if this is the first top-level div/section
+
+    // If element is empty or has no children, try to get its text directly
+    if ($element.length === 0) {
+      return;
+    }
 
     // Process child nodes
     $element.contents().each((i, node) => {
@@ -298,6 +376,13 @@ class WordGenerator {
         } else if (tagName === 'p') {
           const paragraphChildren = [];
           this.processInlineContent($, $(node), paragraphChildren, baseUrl);
+          // If no inline content was found, get the text directly
+          if (paragraphChildren.length === 0) {
+            const text = $(node).text().trim();
+            if (text) {
+              paragraphChildren.push(new TextRun({ text: text }));
+            }
+          }
           if (paragraphChildren.length > 0) {
             children.push(new Paragraph({ children: paragraphChildren }));
           }
@@ -355,6 +440,16 @@ class WordGenerator {
           const isOutermostDivOrSection = isTopLevel && (tagName === 'div' || tagName === 'section');
           const $node = $(node);
           
+          // Check if this element has any content at all
+          const elementText = $node.text().trim();
+          const hasDirectText = elementText.length > 0;
+          const hasNestedElements = $node.children().length > 0;
+          
+          // If element has no content and no nested elements, skip it
+          if (!hasDirectText && !hasNestedElements) {
+            return;
+          }
+          
           // Detect column-like structures (left/right columns, multi-column layouts)
           const classNames = ($node.attr('class') || '').toLowerCase();
           const id = ($node.attr('id') || '').toLowerCase();
@@ -363,7 +458,7 @@ class WordGenerator {
           
           // Detect if this is likely a page/section break point
           const hasLargeHeading = $node.find('h1, h2, h3').length > 0;
-          const hasSubstantialContent = $node.text().trim().length > 500;
+          const hasSubstantialContent = elementText.length > 500;
           
           // Add spacing before outermost divs/sections (except the first one)
           if (isOutermostDivOrSection && !isFirstTopLevelDivOrSection) {
@@ -388,6 +483,16 @@ class WordGenerator {
           this.processElement($, $node, children, baseUrl, imageMap, false);
           const afterLength = children.length;
           const addedContent = afterLength - beforeLength;
+          
+          // If no content was added but element has text, add it directly
+          if (addedContent === 0 && hasDirectText && !hasNestedElements) {
+            // This is a leaf node with text, add it
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: elementText })],
+              })
+            );
+          }
           
           // If this is a full-width section with substantial content, add spacing after
           if (isFullWidth && addedContent > 5) {
