@@ -55,6 +55,7 @@ function initializeDatabase() {
       db.run(`ALTER TABLE jobs ADD COLUMN include_images INTEGER DEFAULT 0`, () => {});
       db.run(`ALTER TABLE jobs ADD COLUMN single_page_only INTEGER DEFAULT 0`, () => {});
       db.run(`ALTER TABLE jobs ADD COLUMN content_selector TEXT`, () => {});
+      db.run(`ALTER TABLE jobs ADD COLUMN user_id INTEGER`, () => {});
     }
   });
 
@@ -104,12 +105,12 @@ function initializeDatabase() {
 }
 
 // Job operations
-function createJob(jobId, url, email = null, followAllLinks = false, includeImages = false, singlePageOnly = false, contentSelector = null) {
+function createJob(jobId, url, email = null, followAllLinks = false, includeImages = false, singlePageOnly = false, contentSelector = null, userId = null) {
   return new Promise((resolve, reject) => {
     const db = getDatabase();
     db.run(
-      'INSERT INTO jobs (id, url, user_email, follow_all_links, include_images, single_page_only, content_selector) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      [jobId, url, email, followAllLinks ? 1 : 0, includeImages ? 1 : 0, singlePageOnly ? 1 : 0, contentSelector || null],
+      'INSERT INTO jobs (id, url, user_email, follow_all_links, include_images, single_page_only, content_selector, user_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [jobId, url, email, followAllLinks ? 1 : 0, includeImages ? 1 : 0, singlePageOnly ? 1 : 0, contentSelector || null, userId],
       function(err) {
         if (err) reject(err);
         else resolve(this.lastID);
@@ -221,6 +222,20 @@ function getPagesByJob(jobId) {
   });
 }
 
+function getJobsByUser(userId) {
+  return new Promise((resolve, reject) => {
+    const db = getDatabase();
+    db.all(
+      'SELECT id, url, status, progress, total_pages, processed_pages, created_at, completed_at, zip_file_path FROM jobs WHERE user_id = ? ORDER BY created_at DESC',
+      [userId],
+      (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      }
+    );
+  });
+}
+
 function pageExists(jobId, url) {
   return new Promise((resolve, reject) => {
     const db = getDatabase();
@@ -305,6 +320,7 @@ module.exports = {
   getUserByUsername,
   getAllUsers,
   createUser,
-  deleteUser
+  deleteUser,
+  getJobsByUser
 };
 

@@ -1,6 +1,6 @@
 const express = require('express');
 const { v4: uuidv4 } = require('uuid');
-const { createJob, getJob, getPagesByJob } = require('../models/database');
+const { createJob, getJob, getPagesByJob, getJobsByUser } = require('../models/database');
 const Crawler = require('../services/crawler');
 const WordGenerator = require('../services/wordGenerator');
 const ZipCreator = require('../services/zipCreator');
@@ -11,10 +11,38 @@ const fs = require('fs');
 const emailService = require('../services/emailService');
 const router = express.Router();
 
+// Get all jobs for the current user (requires auth)
+router.get('/', requireAuth, async (req, res) => {
+  try {
+    const userId = req.session.user.id;
+    const jobs = await getJobsByUser(userId);
+    
+    // Format jobs for response
+    const formattedJobs = jobs.map(job => ({
+      id: job.id,
+      url: job.url,
+      status: job.status,
+      progress: job.progress,
+      totalPages: job.total_pages,
+      processedPages: job.processed_pages,
+      createdAt: job.created_at,
+      completedAt: job.completed_at,
+      zipUrl: job.zip_file_path ? `/api/jobs/${job.id}/download` : null,
+      shareLink: `/job/${job.id}`
+    }));
+    
+    res.json({ jobs: formattedJobs });
+  } catch (error) {
+    console.error('Error getting user jobs:', error);
+    res.status(500).json({ error: 'Failed to get jobs' });
+  }
+});
+
 // Create new job (requires auth)
 router.post('/', requireAuth, async (req, res) => {
   try {
     const { url, email, followAllLinks = false, includeImages = false, singlePageOnly = false, contentSelector = null } = req.body;
+    const userId = req.session.user.id;
 
     if (!url) {
       return res.status(400).json({ error: 'URL is required' });
@@ -28,7 +56,7 @@ router.post('/', requireAuth, async (req, res) => {
     }
 
     const jobId = uuidv4();
-    await createJob(jobId, url, email || null, followAllLinks, includeImages, singlePageOnly, contentSelector);
+    await createJob(jobId, url, email || null, followAllLinks, includeImages, singlePageOnly, contentSelector, userId);
 
     const shareLink = `/job/${jobId}`;
     const baseUrl = `${req.protocol || 'http'}://${req.get('host') || 'localhost:3000'}`;

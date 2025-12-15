@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { ThemeProvider, CssBaseline } from '@mui/material';
-import { Container, AppBar, Toolbar, Typography, Box, IconButton } from '@mui/material';
-import { Web as WebIcon, Logout as LogoutIcon } from '@mui/icons-material';
+import { Container, AppBar, Toolbar, Typography, Box, IconButton, Tabs, Tab } from '@mui/material';
+import { Web as WebIcon, Logout as LogoutIcon, List as ListIcon, Add as AddIcon } from '@mui/icons-material';
 import theme from './theme';
 import UrlForm from './components/UrlForm';
 import JobStatus from './components/JobStatus';
+import JobsList from './components/JobsList';
 import Login from './components/Login';
 
 // Configure axios to send credentials with all requests
@@ -17,6 +18,7 @@ function App() {
   const [authenticated, setAuthenticated] = useState(false);
   const [user, setUser] = useState(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [activeTab, setActiveTab] = useState(0); // 0 = create job, 1 = my jobs
 
   // Check authentication status on mount
   useEffect(() => {
@@ -30,6 +32,7 @@ function App() {
     if (match) {
       setJobId(match[1]);
       setShareLink(path);
+      setActiveTab(1); // Show jobs list when viewing a job
     }
   }, []);
 
@@ -68,7 +71,12 @@ function App() {
   const handleJobCreated = (newJobId, newShareLink) => {
     setJobId(newJobId);
     setShareLink(newShareLink);
-    window.history.pushState({}, '', newShareLink);
+    setActiveTab(1); // Switch to jobs list after creating
+    window.history.pushState({}, '', '/');
+    // Refresh jobs list after a moment
+    setTimeout(() => {
+      window.location.reload();
+    }, 1000);
   };
 
   if (checkingAuth) {
@@ -121,11 +129,23 @@ function App() {
             </IconButton>
           </Toolbar>
         </AppBar>
-        <Container maxWidth="md" sx={{ py: 4, flex: 1 }}>
+        <Container maxWidth="lg" sx={{ py: 4, flex: 1 }}>
           {jobId ? (
             <JobStatus jobId={jobId} shareLink={shareLink} />
           ) : (
-            <UrlForm onJobCreated={handleJobCreated} />
+            <>
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
+                <Tabs value={activeTab} onChange={(e, newValue) => setActiveTab(newValue)}>
+                  <Tab icon={<AddIcon />} iconPosition="start" label="Create New Job" />
+                  <Tab icon={<ListIcon />} iconPosition="start" label="My Jobs" />
+                </Tabs>
+              </Box>
+              {activeTab === 0 ? (
+                <UrlForm onJobCreated={handleJobCreated} />
+              ) : (
+                <JobsList />
+              )}
+            </>
           )}
         </Container>
       </Box>
