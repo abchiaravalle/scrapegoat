@@ -16,14 +16,20 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'scrapegoat-secret-key-change-in-production',
-  resave: false,
+  resave: true, // Set to true to help with session persistence
   saveUninitialized: false,
+  rolling: true, // Reset expiration on activity
   cookie: {
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.NODE_ENV === 'production', // true for HTTPS
     httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
+    maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days (15552000000 ms)
+    sameSite: 'lax' // Works with reverse proxy - don't set domain, let it default to exact domain
+  },
+  name: 'scrapegoat.sid' // Custom session name
 }));
+
+// Trust proxy (important for reverse proxy setups)
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(cors({
