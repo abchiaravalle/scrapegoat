@@ -1,5 +1,6 @@
 const axios = require('axios');
 const cheerio = require('cheerio');
+const puppeteer = require('puppeteer');
 const { Document, Packer, Paragraph, TextRun, HeadingLevel, ExternalHyperlink } = require('docx');
 const path = require('path');
 const fs = require('fs');
@@ -35,46 +36,96 @@ class WordGenerator {
   }
 
   async generateDocument(pageUrl, pageTitle) {
+    let browser = null;
     try {
-      const response = await axios.get(pageUrl, {
-        timeout: 10000,
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
+      console.log(`Loading page with Puppeteer: ${pageUrl}`);
+      
+      // Launch Puppeteer browser
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
       });
-
-      const $ = cheerio.load(response.data);
       
-      // Remove script and style elements
-      $('script, style, nav, footer, header, aside').remove();
-
-      // Use content selector if provided, otherwise use body
-      let mainContent;
-      if (this.contentSelector) {
-        mainContent = $(this.contentSelector).first();
-        // If selector doesn't match, fall back to body
-        if (mainContent.length === 0) {
-          console.warn(`Content selector "${this.contentSelector}" not found on ${pageUrl}, using body`);
-          mainContent = $('body').first();
-        }
-      } else {
-        mainContent = $('body').first();
-      }
-
-      // Debug: Log content info
-      const contentText = mainContent.text().trim();
-      const contentLength = contentText.length;
-      console.log(`Processing content from ${pageUrl}: ${contentLength} characters found`);
+      const page = await browser.newPage();
+      await page.setViewport({ width: 1920, height: 1080 });
       
-      if (contentLength === 0) {
-        console.warn(`WARNING: No text content found in mainContent for ${pageUrl}`);
-        // Try to get all text from body as fallback
-        const bodyText = $('body').text().trim();
-        if (bodyText.length > 0) {
-          console.log(`Fallback: Found ${bodyText.length} characters in body, using body instead`);
-          mainContent = $('body').first();
-        }
+      // Navigate to page and wait for content
+      await page.goto(pageUrl, {
+        waitUntil: 'networkidle2',
+        timeout: 30000
+      });
+      
+      // Wait a bit for any dynamic content
+      await page.waitForTimeout(2000);
+      
+      // Get the actual page title if not provided
+      if (!pageTitle) {
+        pageTitle = await page.title();
       }
+      
+      // Extract all content using Puppeteer
+      const contentData = await page.evaluate((contentSelector) => {
+        const results = {
+          headings: [],
+          paragraphs: [],
+          listItems: [],
+          allText: ''
+        };
+        
+        // Get the main content area
+        let rootElement;
+        if (contentSelector) {
+          rootElement = document.querySelector(contentSelector);
+        }
+        if (!rootElement) {
+          rootElement = document.body;
+        }
+        
+        // Remove unwanted elements
+        const unwanted = rootElement.querySelectorAll('script, style, nav, footer, header, aside, .nav, .footer, .header, .sidebar');
+        unwanted.forEach(el => el.remove());
+        
+        // Extract all headings
+        const headings = rootElement.querySelectorAll('h1, h2, h3, h4, h5, h6');
+        headings.forEach(heading => {
+          const text = heading.innerText.trim();
+          if (text && text.length > 0) {
+            results.headings.push({
+              level: parseInt(heading.tagName.charAt(1)),
+              text: text
+            });
+          }
+        });
+        
+        // Extract all paragraphs
+        const paragraphs = rootElement.querySelectorAll('p');
+        paragraphs.forEach(p => {
+          const text = p.innerText.trim();
+          if (text && text.length > 0) {
+            results.paragraphs.push(text);
+          }
+        });
+        
+        // Extract all list items
+        const listItems = rootElement.querySelectorAll('li');
+        listItems.forEach(li => {
+          const text = li.innerText.trim();
+          if (text && text.length > 0) {
+            results.listItems.push(text);
+          }
+        });
+        
+        // Get all text as fallback
+        results.allText = rootElement.innerText.trim();
+        
+        return results;
+      }, this.contentSelector);
+      
+      console.log(`Puppeteer extracted: ${contentData.headings.length} headings, ${contentData.paragraphs.length} paragraphs, ${contentData.listItems.length} list items`);
+      console.log(`Total text length: ${contentData.allText.length} characters`);
+      
+      await browser.close();
+      browser = null;
 
       // Get folder structure from URL
       const urlFolderPath = this.getFolderPathFromUrl(pageUrl);
@@ -119,138 +170,82 @@ class WordGenerator {
       // Add spacing
       children.push(new Paragraph({ text: '' }));
 
-      // Download images if enabled (only from selected content area)
-      let imageMap = {};
-      if (this.includeImages) {
-        imageMap = await this.downloadImages($, mainContent, pageUrl, imagesFolder);
-      }
-
-      // Process content (mainContent already set above)
-      // Try direct extraction FIRST - it's more reliable for most sites
-      console.log(`Extracting content from ${pageUrl}...`);
-      console.log(`MainContent element: ${mainContent.length > 0 ? mainContent[0].name : 'none'}, text length: ${mainContent.text().trim().length}`);
+      // Process content extracted by Puppeteer
+      const headingLevels = [
+        HeadingLevel.HEADING_1,
+        HeadingLevel.HEADING_2,
+        HeadingLevel.HEADING_3,
+        HeadingLevel.HEADING_4,
+        HeadingLevel.HEADING_5,
+        HeadingLevel.HEADING_6
+      ];
       
-      // Direct extraction: find all paragraphs, headings, and list items (this is most reliable)
-      const directElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th');
-      console.log(`Found ${directElements.length} direct content elements (p, h1-h6, li, etc.)`);
+      // Add all headings
+      contentData.headings.forEach(heading => {
+        const headingLevel = headingLevels[heading.level - 1] || HeadingLevel.HEADING_1;
+        const isSemiboldPhrase = this.isSemiboldPhrase(heading.text);
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({
+                text: heading.text,
+                bold: isSemiboldPhrase,
+              }),
+            ],
+            heading: headingLevel,
+          })
+        );
+      });
       
-      let directCount = 0;
-      directElements.each((i, elem) => {
-        const $elem = $(elem);
-        const text = $elem.text().trim();
-        
-        if (!text || text.length < 3) {
-          return;
-        }
-        
-        const tagName = elem.name.toLowerCase();
-        
-        if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-          const level = parseInt(tagName.charAt(1));
-          const headingLevel = [
-            HeadingLevel.HEADING_1,
-            HeadingLevel.HEADING_2,
-            HeadingLevel.HEADING_3,
-            HeadingLevel.HEADING_4,
-            HeadingLevel.HEADING_5,
-            HeadingLevel.HEADING_6
-          ][level - 1];
-          const isSemiboldPhrase = this.isSemiboldPhrase(text);
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: text,
-                  bold: isSemiboldPhrase,
-                }),
-              ],
-              heading: headingLevel,
-            })
-          );
-          directCount++;
-        } else if (tagName === 'p') {
+      // Add all paragraphs
+      contentData.paragraphs.forEach(text => {
+        if (text && text.length > 0) {
           children.push(
             new Paragraph({
               children: [new TextRun({ text: text })],
             })
           );
-          directCount++;
-        } else if (tagName === 'li') {
+        }
+      });
+      
+      // Add all list items
+      contentData.listItems.forEach(text => {
+        if (text && text.length > 0) {
           children.push(
             new Paragraph({
               children: [new TextRun({ text: `• ${text}` })],
             })
           );
-          directCount++;
-        } else if (tagName === 'blockquote') {
-          children.push(
-            new Paragraph({
-              children: [new TextRun({ text: text, italics: true })],
-            })
-          );
-          directCount++;
         }
       });
       
-      console.log(`Direct extraction added ${directCount} elements`);
-      
-      // If direct extraction didn't find much, try recursive processElement
-      if (directCount < 5) {
-        console.log(`Direct extraction found ${directCount} elements, trying recursive processElement as supplement`);
-        const beforeProcessLength = children.length;
-        this.processElement($, mainContent, children, pageUrl, imageMap, true);
-        const afterProcessLength = children.length;
-        const addedByProcessElement = afterProcessLength - beforeProcessLength;
-        console.log(`processElement added ${addedByProcessElement} additional elements`);
-      }
-      
-      // Final fallback: if we still have very little content, use aggressive text extraction
-      const finalCount = children.length - 3; // Subtract title, URL, spacing
-      if (finalCount < 3) {
-        console.warn(`WARNING: Only ${finalCount} content elements extracted, using aggressive text extraction`);
-        const allText = mainContent.text().trim();
-        if (allText && allText.length > 50) {
-          // Remove what we already have (title, URL) from the text
-          const titleText = (pageTitle || pageUrl).toLowerCase();
-          const urlText = pageUrl.toLowerCase();
-          let cleanText = allText;
-          
-          // Try to remove title and URL from text if they appear
-          cleanText = cleanText.replace(new RegExp(titleText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
-          cleanText = cleanText.replace(new RegExp(urlText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
-          cleanText = cleanText.trim();
-          
-          if (cleanText.length > 50) {
-            // Split by multiple newlines
-            const textBlocks = cleanText
-              .split(/\n{2,}|\r\n{2,}/)
-              .map(block => block.trim())
-              .filter(block => block.length > 10);
-            
-            if (textBlocks.length > 0) {
-              textBlocks.forEach(block => {
-                children.push(
-                  new Paragraph({
-                    children: [new TextRun({ text: block })],
-                  })
-                );
-              });
-              console.log(`Aggressive extraction added ${textBlocks.length} text blocks`);
-            } else {
-              // Last resort: add all text as paragraphs (split by single newlines)
-              const lines = cleanText.split(/\n+/).filter(line => line.trim().length > 10);
-              lines.forEach(line => {
-                children.push(
-                  new Paragraph({
-                    children: [new TextRun({ text: line.trim() })],
-                  })
-                );
-              });
-              console.log(`Added ${lines.length} lines as paragraphs`);
-            }
+      // If we still have very little content, use the allText as fallback
+      const contentCount = contentData.headings.length + contentData.paragraphs.length + contentData.listItems.length;
+      if (contentCount < 5 && contentData.allText.length > 100) {
+        console.log(`Low content count (${contentCount}), using allText fallback`);
+        // Split all text by newlines and create paragraphs
+        const textBlocks = contentData.allText
+          .split(/\n+/)
+          .map(block => block.trim())
+          .filter(block => block.length > 10);
+        
+        // Remove duplicates (text that's already in headings/paragraphs)
+        const existingTexts = new Set();
+        contentData.headings.forEach(h => existingTexts.add(h.text.toLowerCase()));
+        contentData.paragraphs.forEach(p => existingTexts.add(p.toLowerCase()));
+        
+        textBlocks.forEach(block => {
+          if (!existingTexts.has(block.toLowerCase()) && block.length > 10) {
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: block })],
+              })
+            );
           }
-        }
+        });
       }
+      
+      console.log(`Total content elements added: ${children.length - 3}`); // Subtract title, URL, spacing
 
       // Post-process children to optimize layout
       const optimizedChildren = this.optimizeLayout(children);
@@ -284,6 +279,15 @@ class WordGenerator {
     } catch (error) {
       console.error(`Error generating document for ${pageUrl}:`, error);
       throw error;
+    } finally {
+      // Make sure browser is closed
+      if (browser) {
+        try {
+          await browser.close();
+        } catch (e) {
+          console.error('Error closing browser:', e);
+        }
+      }
     }
   }
 
