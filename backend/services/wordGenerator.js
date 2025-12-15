@@ -126,123 +126,81 @@ class WordGenerator {
       }
 
       // Process content (mainContent already set above)
-      // Use direct extraction as primary method - more reliable than recursive processing
-      console.log(`Extracting content from ${pageUrl}...`);
+      // Use recursive processElement as primary method (this worked before)
+      console.log(`Processing content from ${pageUrl}...`);
+      const beforeProcessLength = children.length;
+      this.processElement($, mainContent, children, pageUrl, imageMap, true);
+      const afterProcessLength = children.length;
+      const addedByProcessElement = afterProcessLength - beforeProcessLength;
       
-      // Extract all paragraphs, headings, and text blocks directly
-      const contentElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, article, section, div');
-      let extractedCount = 0;
+      console.log(`processElement added ${addedByProcessElement} elements`);
       
-      // Process each element, avoiding duplicates from nested structures
-      const processedElements = new Set();
-      
-      contentElements.each((i, elem) => {
-        const $elem = $(elem);
-        const text = $elem.text().trim();
+      // If processElement didn't add much content, try direct extraction as fallback
+      if (addedByProcessElement < 3) {
+        console.warn(`WARNING: processElement added minimal content (${addedByProcessElement}), trying direct extraction`);
         
-        // Skip if empty or too short
-        if (!text || text.length < 3) {
-          return;
-        }
+        // Direct extraction: find all paragraphs, headings, and list items
+        const directElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li');
+        let directCount = 0;
         
-        // Skip if this element is a parent of an element we've already processed
-        // (to avoid duplicate content)
-        let shouldSkip = false;
-        processedElements.forEach(processedElem => {
-          if ($elem.find(processedElem).length > 0 || $(processedElem).find(elem).length > 0) {
-            // One contains the other, skip the parent
-            if ($elem.find(processedElem).length > 0) {
-              shouldSkip = true;
-            }
-          }
-        });
-        
-        if (shouldSkip) {
-          return;
-        }
-        
-        const tagName = elem.name.toLowerCase();
-        
-        // Process headings
-        if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-          const level = parseInt(tagName.charAt(1));
-          const headingLevel = [
-            HeadingLevel.HEADING_1,
-            HeadingLevel.HEADING_2,
-            HeadingLevel.HEADING_3,
-            HeadingLevel.HEADING_4,
-            HeadingLevel.HEADING_5,
-            HeadingLevel.HEADING_6
-          ][level - 1];
-          const isSemiboldPhrase = this.isSemiboldPhrase(text);
-          children.push(
-            new Paragraph({
-              children: [
-                new TextRun({
-                  text: text,
-                  bold: isSemiboldPhrase,
-                }),
-              ],
-              heading: headingLevel,
-            })
-          );
-          processedElements.add(elem);
-          extractedCount++;
-        }
-        // Process paragraphs
-        else if (tagName === 'p') {
-          children.push(
-            new Paragraph({
-              children: [new TextRun({ text: text })],
-            })
-          );
-          processedElements.add(elem);
-          extractedCount++;
-        }
-        // Process list items
-        else if (tagName === 'li') {
-          children.push(
-            new Paragraph({
-              children: [new TextRun({ text: `• ${text}` })],
-            })
-          );
-          processedElements.add(elem);
-          extractedCount++;
-        }
-        // Process other block elements (div, section, article) - but only if they have substantial unique content
-        else if (['div', 'section', 'article'].includes(tagName)) {
-          // Only add if this div/section has direct text content or contains headings/paragraphs
-          const hasDirectText = $elem.contents().filter((idx, node) => node.type === 'text' && $(node).text().trim().length > 0).length > 0;
-          const hasContentElements = $elem.find('p, h1, h2, h3, h4, h5, h6').length > 0;
+        directElements.each((i, elem) => {
+          const $elem = $(elem);
+          const text = $elem.text().trim();
           
-          // If this element has substantial text and no nested content elements, add it
-          if (hasDirectText && text.length > 20 && !hasContentElements) {
+          if (!text || text.length < 3) {
+            return;
+          }
+          
+          const tagName = elem.name.toLowerCase();
+          
+          if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+            const level = parseInt(tagName.charAt(1));
+            const headingLevel = [
+              HeadingLevel.HEADING_1,
+              HeadingLevel.HEADING_2,
+              HeadingLevel.HEADING_3,
+              HeadingLevel.HEADING_4,
+              HeadingLevel.HEADING_5,
+              HeadingLevel.HEADING_6
+            ][level - 1];
+            const isSemiboldPhrase = this.isSemiboldPhrase(text);
+            children.push(
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: text,
+                    bold: isSemiboldPhrase,
+                  }),
+                ],
+                heading: headingLevel,
+              })
+            );
+            directCount++;
+          } else if (tagName === 'p') {
             children.push(
               new Paragraph({
                 children: [new TextRun({ text: text })],
               })
             );
-            processedElements.add(elem);
-            extractedCount++;
+            directCount++;
+          } else if (tagName === 'li') {
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: `• ${text}` })],
+              })
+            );
+            directCount++;
           }
-        }
-      });
-      
-      console.log(`Extracted ${extractedCount} content elements from ${pageUrl}`);
-      
-      // If we didn't extract much, also try recursive processing as fallback
-      if (extractedCount < 5) {
-        console.log(`Low extraction count (${extractedCount}), trying recursive processing as fallback`);
-        const beforeProcessLength = children.length;
-        this.processElement($, mainContent, children, pageUrl, imageMap, true);
-        const afterProcessLength = children.length;
+        });
         
-        // If still minimal content, use aggressive text extraction
-        if (afterProcessLength <= beforeProcessLength + 2) {
-          console.warn(`WARNING: Still minimal content for ${pageUrl}, using aggressive text extraction`);
+        console.log(`Direct extraction added ${directCount} elements`);
+        
+        // If still no content, use aggressive text extraction
+        if (directCount === 0 && addedByProcessElement === 0) {
+          console.warn(`WARNING: No content extracted, using aggressive text extraction`);
           const allText = mainContent.text().trim();
           if (allText && allText.length > 50) {
-            // Split by multiple newlines
+            // Split by multiple newlines or common separators
             const textBlocks = allText
               .split(/\n{2,}|\r\n{2,}/)
               .map(block => block.trim())
@@ -256,6 +214,15 @@ class WordGenerator {
                   })
                 );
               });
+              console.log(`Aggressive extraction added ${textBlocks.length} text blocks`);
+            } else {
+              // Last resort: add all text as one paragraph
+              children.push(
+                new Paragraph({
+                  children: [new TextRun({ text: allText.substring(0, 10000) })],
+                })
+              );
+              console.log(`Added all text as single paragraph`);
             }
           }
         }
