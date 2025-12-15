@@ -126,82 +126,103 @@ class WordGenerator {
       }
 
       // Process content (mainContent already set above)
-      // Use recursive processElement as primary method (this worked before)
-      console.log(`Processing content from ${pageUrl}...`);
-      const beforeProcessLength = children.length;
-      this.processElement($, mainContent, children, pageUrl, imageMap, true);
-      const afterProcessLength = children.length;
-      const addedByProcessElement = afterProcessLength - beforeProcessLength;
+      // Try direct extraction FIRST - it's more reliable for most sites
+      console.log(`Extracting content from ${pageUrl}...`);
+      console.log(`MainContent element: ${mainContent.length > 0 ? mainContent[0].name : 'none'}, text length: ${mainContent.text().trim().length}`);
       
-      console.log(`processElement added ${addedByProcessElement} elements`);
+      // Direct extraction: find all paragraphs, headings, and list items (this is most reliable)
+      const directElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li, blockquote, td, th');
+      console.log(`Found ${directElements.length} direct content elements (p, h1-h6, li, etc.)`);
       
-      // If processElement didn't add much content, try direct extraction as fallback
-      if (addedByProcessElement < 3) {
-        console.warn(`WARNING: processElement added minimal content (${addedByProcessElement}), trying direct extraction`);
+      let directCount = 0;
+      directElements.each((i, elem) => {
+        const $elem = $(elem);
+        const text = $elem.text().trim();
         
-        // Direct extraction: find all paragraphs, headings, and list items
-        const directElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li');
-        let directCount = 0;
+        if (!text || text.length < 3) {
+          return;
+        }
         
-        directElements.each((i, elem) => {
-          const $elem = $(elem);
-          const text = $elem.text().trim();
+        const tagName = elem.name.toLowerCase();
+        
+        if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+          const level = parseInt(tagName.charAt(1));
+          const headingLevel = [
+            HeadingLevel.HEADING_1,
+            HeadingLevel.HEADING_2,
+            HeadingLevel.HEADING_3,
+            HeadingLevel.HEADING_4,
+            HeadingLevel.HEADING_5,
+            HeadingLevel.HEADING_6
+          ][level - 1];
+          const isSemiboldPhrase = this.isSemiboldPhrase(text);
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: text,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
+              heading: headingLevel,
+            })
+          );
+          directCount++;
+        } else if (tagName === 'p') {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: text })],
+            })
+          );
+          directCount++;
+        } else if (tagName === 'li') {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: `• ${text}` })],
+            })
+          );
+          directCount++;
+        } else if (tagName === 'blockquote') {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: text, italics: true })],
+            })
+          );
+          directCount++;
+        }
+      });
+      
+      console.log(`Direct extraction added ${directCount} elements`);
+      
+      // If direct extraction didn't find much, try recursive processElement
+      if (directCount < 5) {
+        console.log(`Direct extraction found ${directCount} elements, trying recursive processElement as supplement`);
+        const beforeProcessLength = children.length;
+        this.processElement($, mainContent, children, pageUrl, imageMap, true);
+        const afterProcessLength = children.length;
+        const addedByProcessElement = afterProcessLength - beforeProcessLength;
+        console.log(`processElement added ${addedByProcessElement} additional elements`);
+      }
+      
+      // Final fallback: if we still have very little content, use aggressive text extraction
+      const finalCount = children.length - 3; // Subtract title, URL, spacing
+      if (finalCount < 3) {
+        console.warn(`WARNING: Only ${finalCount} content elements extracted, using aggressive text extraction`);
+        const allText = mainContent.text().trim();
+        if (allText && allText.length > 50) {
+          // Remove what we already have (title, URL) from the text
+          const titleText = (pageTitle || pageUrl).toLowerCase();
+          const urlText = pageUrl.toLowerCase();
+          let cleanText = allText;
           
-          if (!text || text.length < 3) {
-            return;
-          }
+          // Try to remove title and URL from text if they appear
+          cleanText = cleanText.replace(new RegExp(titleText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
+          cleanText = cleanText.replace(new RegExp(urlText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi'), '');
+          cleanText = cleanText.trim();
           
-          const tagName = elem.name.toLowerCase();
-          
-          if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-            const level = parseInt(tagName.charAt(1));
-            const headingLevel = [
-              HeadingLevel.HEADING_1,
-              HeadingLevel.HEADING_2,
-              HeadingLevel.HEADING_3,
-              HeadingLevel.HEADING_4,
-              HeadingLevel.HEADING_5,
-              HeadingLevel.HEADING_6
-            ][level - 1];
-            const isSemiboldPhrase = this.isSemiboldPhrase(text);
-            children.push(
-              new Paragraph({
-                children: [
-                  new TextRun({
-                    text: text,
-                    bold: isSemiboldPhrase,
-                  }),
-                ],
-                heading: headingLevel,
-              })
-            );
-            directCount++;
-          } else if (tagName === 'p') {
-            children.push(
-              new Paragraph({
-                children: [new TextRun({ text: text })],
-              })
-            );
-            directCount++;
-          } else if (tagName === 'li') {
-            children.push(
-              new Paragraph({
-                children: [new TextRun({ text: `• ${text}` })],
-              })
-            );
-            directCount++;
-          }
-        });
-        
-        console.log(`Direct extraction added ${directCount} elements`);
-        
-        // If still no content, use aggressive text extraction
-        if (directCount === 0 && addedByProcessElement === 0) {
-          console.warn(`WARNING: No content extracted, using aggressive text extraction`);
-          const allText = mainContent.text().trim();
-          if (allText && allText.length > 50) {
-            // Split by multiple newlines or common separators
-            const textBlocks = allText
+          if (cleanText.length > 50) {
+            // Split by multiple newlines
+            const textBlocks = cleanText
               .split(/\n{2,}|\r\n{2,}/)
               .map(block => block.trim())
               .filter(block => block.length > 10);
@@ -216,13 +237,16 @@ class WordGenerator {
               });
               console.log(`Aggressive extraction added ${textBlocks.length} text blocks`);
             } else {
-              // Last resort: add all text as one paragraph
-              children.push(
-                new Paragraph({
-                  children: [new TextRun({ text: allText.substring(0, 10000) })],
-                })
-              );
-              console.log(`Added all text as single paragraph`);
+              // Last resort: add all text as paragraphs (split by single newlines)
+              const lines = cleanText.split(/\n+/).filter(line => line.trim().length > 10);
+              lines.forEach(line => {
+                children.push(
+                  new Paragraph({
+                    children: [new TextRun({ text: line.trim() })],
+                  })
+                );
+              });
+              console.log(`Added ${lines.length} lines as paragraphs`);
             }
           }
         }
