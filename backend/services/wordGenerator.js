@@ -126,63 +126,137 @@ class WordGenerator {
       }
 
       // Process content (mainContent already set above)
-      // Pass true for isTopLevel to add spacing between outermost divs/sections
-      const beforeProcessLength = children.length;
-      this.processElement($, mainContent, children, pageUrl, imageMap, true);
-      const afterProcessLength = children.length;
+      // Use direct extraction as primary method - more reliable than recursive processing
+      console.log(`Extracting content from ${pageUrl}...`);
       
-      // If no content was added, try a more aggressive extraction
-      if (afterProcessLength === beforeProcessLength || afterProcessLength <= 3) {
-        console.warn(`WARNING: processElement added no/minimal content for ${pageUrl}, trying fallback extraction`);
+      // Extract all paragraphs, headings, and text blocks directly
+      const contentElements = mainContent.find('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote, article, section, div');
+      let extractedCount = 0;
+      
+      // Process each element, avoiding duplicates from nested structures
+      const processedElements = new Set();
+      
+      contentElements.each((i, elem) => {
+        const $elem = $(elem);
+        const text = $elem.text().trim();
         
-        // Fallback: Extract all paragraphs, headings, and text blocks directly
-        mainContent.find('p, h1, h2, h3, h4, h5, h6, li, td, th, blockquote').each((i, elem) => {
-          const $elem = $(elem);
-          const text = $elem.text().trim();
-          if (text && text.length > 0) {
-            const tagName = elem.name.toLowerCase();
-            if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-              const level = parseInt(tagName.charAt(1));
-              const headingLevel = [
-                HeadingLevel.HEADING_1,
-                HeadingLevel.HEADING_2,
-                HeadingLevel.HEADING_3,
-                HeadingLevel.HEADING_4,
-                HeadingLevel.HEADING_5,
-                HeadingLevel.HEADING_6
-              ][level - 1];
-              children.push(
-                new Paragraph({
-                  text: text,
-                  heading: headingLevel,
-                })
-              );
-            } else {
-              children.push(
-                new Paragraph({
-                  children: [new TextRun({ text: text })],
-                })
-              );
+        // Skip if empty or too short
+        if (!text || text.length < 3) {
+          return;
+        }
+        
+        // Skip if this element is a parent of an element we've already processed
+        // (to avoid duplicate content)
+        let shouldSkip = false;
+        processedElements.forEach(processedElem => {
+          if ($elem.find(processedElem).length > 0 || $(processedElem).find(elem).length > 0) {
+            // One contains the other, skip the parent
+            if ($elem.find(processedElem).length > 0) {
+              shouldSkip = true;
             }
           }
         });
         
-        // If still no content, get all text from mainContent
-        if (children.length <= 3) {
+        if (shouldSkip) {
+          return;
+        }
+        
+        const tagName = elem.name.toLowerCase();
+        
+        // Process headings
+        if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+          const level = parseInt(tagName.charAt(1));
+          const headingLevel = [
+            HeadingLevel.HEADING_1,
+            HeadingLevel.HEADING_2,
+            HeadingLevel.HEADING_3,
+            HeadingLevel.HEADING_4,
+            HeadingLevel.HEADING_5,
+            HeadingLevel.HEADING_6
+          ][level - 1];
+          const isSemiboldPhrase = this.isSemiboldPhrase(text);
+          children.push(
+            new Paragraph({
+              children: [
+                new TextRun({
+                  text: text,
+                  bold: isSemiboldPhrase,
+                }),
+              ],
+              heading: headingLevel,
+            })
+          );
+          processedElements.add(elem);
+          extractedCount++;
+        }
+        // Process paragraphs
+        else if (tagName === 'p') {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: text })],
+            })
+          );
+          processedElements.add(elem);
+          extractedCount++;
+        }
+        // Process list items
+        else if (tagName === 'li') {
+          children.push(
+            new Paragraph({
+              children: [new TextRun({ text: `• ${text}` })],
+            })
+          );
+          processedElements.add(elem);
+          extractedCount++;
+        }
+        // Process other block elements (div, section, article) - but only if they have substantial unique content
+        else if (['div', 'section', 'article'].includes(tagName)) {
+          // Only add if this div/section has direct text content or contains headings/paragraphs
+          const hasDirectText = $elem.contents().filter((idx, node) => node.type === 'text' && $(node).text().trim().length > 0).length > 0;
+          const hasContentElements = $elem.find('p, h1, h2, h3, h4, h5, h6').length > 0;
+          
+          // If this element has substantial text and no nested content elements, add it
+          if (hasDirectText && text.length > 20 && !hasContentElements) {
+            children.push(
+              new Paragraph({
+                children: [new TextRun({ text: text })],
+              })
+            );
+            processedElements.add(elem);
+            extractedCount++;
+          }
+        }
+      });
+      
+      console.log(`Extracted ${extractedCount} content elements from ${pageUrl}`);
+      
+      // If we didn't extract much, also try recursive processing as fallback
+      if (extractedCount < 5) {
+        console.log(`Low extraction count (${extractedCount}), trying recursive processing as fallback`);
+        const beforeProcessLength = children.length;
+        this.processElement($, mainContent, children, pageUrl, imageMap, true);
+        const afterProcessLength = children.length;
+        
+        // If still minimal content, use aggressive text extraction
+        if (afterProcessLength <= beforeProcessLength + 2) {
+          console.warn(`WARNING: Still minimal content for ${pageUrl}, using aggressive text extraction`);
           const allText = mainContent.text().trim();
-          if (allText && allText.length > 0) {
-            // Split by newlines and create paragraphs
-            const textBlocks = allText.split(/\n+/).filter(block => block.trim().length > 0);
-            textBlocks.forEach(block => {
-              const trimmed = block.trim();
-              if (trimmed.length > 0) {
+          if (allText && allText.length > 50) {
+            // Split by multiple newlines
+            const textBlocks = allText
+              .split(/\n{2,}|\r\n{2,}/)
+              .map(block => block.trim())
+              .filter(block => block.length > 10);
+            
+            if (textBlocks.length > 0) {
+              textBlocks.forEach(block => {
                 children.push(
                   new Paragraph({
-                    children: [new TextRun({ text: trimmed })],
+                    children: [new TextRun({ text: block })],
                   })
                 );
-              }
-            });
+              });
+            }
           }
         }
       }
